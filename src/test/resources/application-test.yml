@@ -1,0 +1,27 @@
+spring:
+  application:
+    name: DistributedSystemProject
+
+  # Vô hiệu hóa auto-config của JPA
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration
+      - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
+
+  # Custom datasources
+  datasource:
+    node1:
+      url: jdbc:mysql://localhost:3306/db_node1?useSSL=false&serverTimezone=UTC
+      username: root
+      password: root
+      driver-class-name: com.mysql.cj.jdbc.Driver
+    node2:
+      url: jdbc:mysql://localhost:3306/db_node2?useSSL=false&serverTimezone=UTC
+      username: root
+      password: root
+      driver-class-name: com.mysql.cj.jdbc.Driver
+    node3:
+      url: jdbc:mysql://localhost:3306/db_node3?useSSL=false&serverTimezone=UTC
+      username: root
+      password: root
+      driver-class-name: com.mysql.cj.jdbc.Driver
