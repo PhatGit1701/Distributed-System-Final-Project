@@ -1,6 +1,7 @@
 package com.example.distributedsystemproject.controller;
 
 import com.example.distributedsystemproject.component.FailureDetectorComponent;
+import com.example.distributedsystemproject.model.StockView;
 import com.example.distributedsystemproject.service.CoordinatorService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
@@ -14,7 +15,7 @@ public class DemoController {
     @Autowired private FailureDetectorComponent failureDetectorComponent;
 
     @GetMapping("/stock/{sku}")
-    public Map<String, Object> getStock(@PathVariable String sku) {
+    public StockView getStock(@PathVariable String sku) {
         return coordinatorService.readStock(sku);
     }
 

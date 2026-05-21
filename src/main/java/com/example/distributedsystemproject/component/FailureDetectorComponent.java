@@ -1,5 +1,8 @@
 package com.example.distributedsystemproject.component;
 
+import com.example.distributedsystemproject.repository.node1.Node1Repository;
+import com.example.distributedsystemproject.repository.node2.Node2Repository;
+import com.example.distributedsystemproject.repository.node3.Node3Repository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -9,9 +12,9 @@ import java.util.concurrent.ConcurrentHashMap;
 @Service
 public class FailureDetectorComponent {
 
-    @Autowired private JdbcTemplate jdbcNode1;
-    @Autowired private JdbcTemplate jdbcNode2;
-    @Autowired private JdbcTemplate jdbcNode3;
+    @Autowired private Node1Repository node1Repository;
+    @Autowired private Node2Repository node2Repository;
+    @Autowired private Node3Repository node3Repository;
 
     // Lưu trạng thái trên RAM (ACTIVE, DOWN, RECOVERING)
     public final ConcurrentHashMap<String, String> nodeStatusMap = new ConcurrentHashMap<>();
@@ -25,28 +28,27 @@ public class FailureDetectorComponent {
     // Gửi Heartbeat mỗi 3 giây
     @Scheduled(fixedRate = 3000)
     public void checkNodesHealth() {
-        checkPing("NODE_1", jdbcNode1);
-        checkPing("NODE_2", jdbcNode2);
-        checkPing("NODE_3", jdbcNode3);
+        checkPing("NODE_1"); checkPing("NODE_2"); checkPing("NODE_3");
     }
 
-    private void checkPing(String nodeId, JdbcTemplate jdbcTemplate) {
-        // Không ping nếu node đang tự phục hồi dữ liệu
+    private void checkPing(String nodeId) {
         if ("RECOVERING".equals(nodeStatusMap.get(nodeId))) return;
-
+        boolean alive;
         try {
-            jdbcTemplate.setQueryTimeout(1);
-            jdbcTemplate.execute("SELECT 1"); // Ping nhẹ
-
-            // Nếu sống lại sau khi sập, chuyển sang DOWN để đợi gọi hàm Recover
-            if (!"DOWN".equals(nodeStatusMap.get(nodeId)) && !"ACTIVE".equals(nodeStatusMap.get(nodeId))) {
-                nodeStatusMap.put(nodeId, "ACTIVE");
-            }
+            alive = switch (nodeId) {
+                case "NODE_1" -> Integer.valueOf(1).equals(node1Repository.ping());
+                case "NODE_2" -> Integer.valueOf(1).equals(node2Repository.ping());
+                case "NODE_3" -> Integer.valueOf(1).equals(node3Repository.ping());
+                default -> false;
+            };
         } catch (Exception e) {
-            if (!"DOWN".equals(nodeStatusMap.get(nodeId))) {
-                nodeStatusMap.put(nodeId, "DOWN");
-                System.err.println("❌ " + nodeId + " SẬP (Không phản hồi). Trạng thái -> DOWN");
-            }
+            alive = false; // Database is down/inaccessible
+        }
+        if (!alive && !"DOWN".equals(nodeStatusMap.get(nodeId))) {
+            nodeStatusMap.put(nodeId, "DOWN");
+        }
+        if (alive && !"ACTIVE".equals(nodeStatusMap.get(nodeId)) && !"RECOVERING".equals(nodeStatusMap.get(nodeId))) {
+            nodeStatusMap.put(nodeId, "ACTIVE");
         }
     }
 }

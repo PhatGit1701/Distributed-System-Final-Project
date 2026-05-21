@@ -1,44 +1,58 @@
 package com.example.distributedsystemproject.service;
 
 import com.example.distributedsystemproject.component.FailureDetectorComponent;
+import com.example.distributedsystemproject.model.RecoveryLog;
+import com.example.distributedsystemproject.model.StockLevel;
+import com.example.distributedsystemproject.model.StockView;
+import com.example.distributedsystemproject.repository.node1.Node1Repository;
+import com.example.distributedsystemproject.repository.node2.Node2Repository;
+import com.example.distributedsystemproject.repository.node3.Node3Repository;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
+import java.util.Optional;
 
 @Service
 public class CoordinatorService {
 
-    @Autowired @Qualifier("jdbcNode1") private JdbcTemplate jdbcNode1;
-    @Autowired @Qualifier("jdbcNode2") private JdbcTemplate jdbcNode2;
-    @Autowired @Qualifier("jdbcNode3") private JdbcTemplate jdbcNode3;
+    @Autowired private Node1Repository node1Repository;
+    @Autowired private Node2Repository node2Repository;
+    @Autowired private Node3Repository node3Repository;
     @Autowired private FailureDetectorComponent failureDetectorService;
 
-    private JdbcTemplate getJdbcTemplate(String nodeId) {
-        return switch (nodeId) {
-            case "NODE_1" -> jdbcNode1;
-            case "NODE_2" -> jdbcNode2;
-            case "NODE_3" -> jdbcNode3;
-            default -> throw new IllegalArgumentException("Unknown Node");
-        };
+    private void upsert(String nodeId, String sku, int quantity, String warehouseId) {
+        switch (nodeId) { case "NODE_1" -> node1Repository.upsertStock(sku, quantity, warehouseId); case "NODE_2" -> node2Repository.upsertStock(sku, quantity, warehouseId); case "NODE_3" -> node3Repository.upsertStock(sku, quantity, warehouseId); }
     }
 
-    // --- 1. WRITE-ALL-AVAILABLE ---
+    private void insertLog(String nodeId, String targetNode, String sku, int quantity) {
+        switch (nodeId) { case "NODE_1" -> node1Repository.insertRecoveryLog(targetNode, sku, quantity); case "NODE_2" -> node2Repository.insertRecoveryLog(targetNode, sku, quantity); case "NODE_3" -> node3Repository.insertRecoveryLog(targetNode, sku, quantity); }
+    }
+
+    private Optional<StockLevel> findStock(String nodeId, String sku) {
+        return switch (nodeId) { case "NODE_1" -> node1Repository.findStockBySku(sku); case "NODE_2" -> node2Repository.findStockBySku(sku); case "NODE_3" -> node3Repository.findStockBySku(sku); default -> Optional.empty();};
+    }
+
+    private List<RecoveryLog> findLogs(String nodeId, String targetNode) {
+        return switch (nodeId) { case "NODE_1" -> node1Repository.findRecoveryLogs(targetNode); case "NODE_2" -> node2Repository.findRecoveryLogs(targetNode); case "NODE_3" -> node3Repository.findRecoveryLogs(targetNode); default -> List.of();};
+    }
+
+    private void deleteLog(String nodeId, Long logId) {
+        switch (nodeId) { case "NODE_1" -> node1Repository.deleteRecoveryLog(logId); case "NODE_2" -> node2Repository.deleteRecoveryLog(logId); case "NODE_3" -> node3Repository.deleteRecoveryLog(logId); }
+    }
+
     public void writeStock(String sku, int quantity, String warehouseId) {
         String[] allNodes = {"NODE_1", "NODE_2", "NODE_3"};
         List<String> activeNodes = new ArrayList<>();
-        List<String> downedNodes = new ArrayList<>();
+        List<String> unavailableNodes = new ArrayList<>();
 
         for (String node : allNodes) {
             if ("ACTIVE".equals(failureDetectorService.nodeStatusMap.get(node))) {
                 activeNodes.add(node);
             } else {
-                downedNodes.add(node);
+                unavailableNodes.add(node);
             }
         }
 
@@ -46,80 +60,57 @@ public class CoordinatorService {
             throw new RuntimeException("Tất cả các node đều sập. Hệ thống ngừng ghi!");
         }
 
+        List<String> successfulNodes = new ArrayList<>();
+        List<String> failedDuringWrite = new ArrayList<>();
+
         for (String activeNode : activeNodes) {
-            JdbcTemplate jdbc = getJdbcTemplate(activeNode);
+            try {
+                upsert(activeNode, sku, quantity, warehouseId);
+                successfulNodes.add(activeNode);
+            } catch (Exception ex) {
+                failedDuringWrite.add(activeNode);
+                failureDetectorService.nodeStatusMap.put(activeNode, "DOWN");
+                System.err.println("❌ Ghi thất bại tại " + activeNode + ". Node được đánh dấu DOWN và vẫn tiếp tục ghi node khác.");
+            }
+        }
 
-            // Ghi dữ liệu thực tế vào Node đang sống
-            String sqlWrite = "INSERT INTO stock_levels (sku, quantity, warehouse_id) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE quantity = ?";
-            jdbc.update(sqlWrite, sku, quantity, warehouseId, quantity);
+        if (successfulNodes.isEmpty()) {
+            throw new RuntimeException("Không ghi được vào node nào đang hoạt động.");
+        }
 
-            // Ghi log HỘ các node đã sập (Decentralized Logging)
-            for (String downedNode : downedNodes) {
-                String sqlLog = "INSERT INTO recovery_log (target_node, sku, quantity) VALUES (?, ?, ?)";
-                jdbc.update(sqlLog, downedNode, sku, quantity);
+        unavailableNodes.addAll(failedDuringWrite);
+
+        for (String successfulNode : successfulNodes) {
+            for (String unavailableNode : unavailableNodes) {
+                if (!successfulNode.equals(unavailableNode)) {
+                    insertLog(successfulNode, unavailableNode, sku, quantity);
+                }
             }
         }
     }
 
-    // --- 2. READ-ONE ---
-    public Map<String, Object> readStock(String sku) {
-        String[] allNodes = {"NODE_1", "NODE_2", "NODE_3"};
-        for (String node : allNodes) {
+    public StockView readStock(String sku) {
+        for (String node : new String[]{"NODE_1", "NODE_2", "NODE_3"}) {
             if ("ACTIVE".equals(failureDetectorService.nodeStatusMap.get(node))) {
-                try {
-                    String sql = "SELECT * FROM stock_levels WHERE sku = ?";
-                    Map<String, Object> result = getJdbcTemplate(node).queryForMap(sql, sku);
-                    result.put("Served_By_Node", node);
-                    return result;
-                } catch (Exception e) {
-                    // Node có thể vừa sập, thử node ACTIVE tiếp theo
-                }
+                Optional<StockLevel> stock = findStock(node, sku);
+                if (stock.isPresent()) return new StockView(stock.get().getSku(), stock.get().getQuantity(), stock.get().getWarehouseId(), node);
             }
         }
         throw new RuntimeException("Không có node nào ACTIVE để phục vụ lệnh đọc.");
     }
 
-    // --- 3. RECOVERY (Catch-up) ---
     @Async
     public void processRecovery(String recoveringNodeId) {
-        System.out.println("🔄 Bắt đầu Catch-up cho: " + recoveringNodeId);
         failureDetectorService.nodeStatusMap.put(recoveringNodeId, "RECOVERING");
-
         String helperNode = null;
-        for (String node : new String[]{"NODE_1", "NODE_2", "NODE_3"}) {
-            if ("ACTIVE".equals(failureDetectorService.nodeStatusMap.get(node))) {
-                helperNode = node;
-                break;
-            }
-        }
+        for (String node : new String[]{"NODE_1", "NODE_2", "NODE_3"}) if ("ACTIVE".equals(failureDetectorService.nodeStatusMap.get(node))) { helperNode = node; break; }
+        if (helperNode == null) return;
 
-        if (helperNode == null) {
-            System.err.println("Không có Node ACTIVE nào để lấy log phục hồi.");
-            return;
-        }
-
-        JdbcTemplate helperJdbc = getJdbcTemplate(helperNode);
-        JdbcTemplate targetJdbc = getJdbcTemplate(recoveringNodeId);
-
-        // Đọc log từ Helper Node
-        List<Map<String, Object>> logs = helperJdbc.queryForList(
-                "SELECT * FROM recovery_log WHERE target_node = ?", recoveringNodeId);
-
-        for (Map<String, Object> log : logs) {
-            String sku = (String) log.get("sku");
-            int quantity = (Integer) log.get("quantity");
-
-            // Giả lập độ trễ mạng để có thời gian test Stale Read
+        for (RecoveryLog log : findLogs(helperNode, recoveringNodeId)) {
             try { Thread.sleep(3000); } catch (InterruptedException ignored) {}
-
-            String sql = "INSERT INTO stock_levels (sku, quantity, warehouse_id) VALUES (?, ?, 'WH-RECOVER') ON DUPLICATE KEY UPDATE quantity = ?";
-            targetJdbc.update(sql, sku, quantity, quantity);
-
-            // Xóa log trên Helper Node sau khi copy xong
-            helperJdbc.update("DELETE FROM recovery_log WHERE log_id = ?", log.get("log_id"));
+            upsert(recoveringNodeId, log.getSku(), log.getQuantity(), "WH-RECOVER");
+            deleteLog(helperNode, log.getLogId());
         }
-
         failureDetectorService.nodeStatusMap.put(recoveringNodeId, "ACTIVE");
-        System.out.println("✅ " + recoveringNodeId + " đã cập nhật xong và chuyển về ACTIVE!");
     }
 }
