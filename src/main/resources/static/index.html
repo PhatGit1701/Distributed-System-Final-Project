@@ -1,0 +1,1156 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ROWA-A Distributed Database Visualizer</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-gradient: radial-gradient(circle at top right, #111827, #030712);
+            --panel-bg: rgba(17, 24, 39, 0.7);
+            --panel-border: rgba(255, 255, 255, 0.08);
+            --glow-green: 0 0 20px rgba(16, 185, 129, 0.4);
+            --glow-red: 0 0 20px rgba(239, 68, 68, 0.4);
+            --glow-yellow: 0 0 20px rgba(245, 158, 11, 0.4);
+            --color-active: #10b981;
+            --color-down: #ef4444;
+            --color-recovering: #f59e0b;
+            --font-main: 'Outfit', sans-serif;
+            --font-code: 'Space Grotesk', monospace;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        body {
+            font-family: var(--font-main);
+            background: var(--bg-gradient);
+            color: #f3f4f6;
+            min-height: 100vh;
+            padding: 2rem;
+            overflow-x: hidden;
+        }
+
+        /* Ambient glowing backgrounds */
+        .ambient-glow {
+            position: absolute;
+            width: 500px;
+            height: 500px;
+            background: radial-gradient(circle, rgba(99, 102, 241, 0.15) 0%, rgba(99, 102, 241, 0) 70%);
+            top: -10%;
+            left: 10%;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .ambient-glow-2 {
+            position: absolute;
+            width: 400px;
+            height: 400px;
+            background: radial-gradient(circle, rgba(16, 185, 129, 0.08) 0%, rgba(16, 185, 129, 0) 70%);
+            bottom: 10%;
+            right: 10%;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* Header */
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2.5rem;
+            border-bottom: 1px solid var(--panel-border);
+            padding-bottom: 1.5rem;
+        }
+
+        .logo-section h1 {
+            font-size: 2rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #a5b4fc, #6366f1);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: -0.5px;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .logo-section p {
+            font-size: 0.9rem;
+            color: #9ca3af;
+            margin-top: 0.25rem;
+        }
+
+        .badge-mode {
+            background: rgba(99, 102, 241, 0.15);
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            color: #a5b4fc;
+            padding: 0.4rem 1rem;
+            border-radius: 9999px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .badge-mode::before {
+            content: '';
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            background: #818cf8;
+            border-radius: 50%;
+            box-shadow: 0 0 10px #818cf8;
+        }
+
+        /* Grid Layout */
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 2rem;
+        }
+
+        @media (min-width: 1024px) {
+            .dashboard-grid {
+                grid-template-columns: 3fr 2fr;
+            }
+        }
+
+        /* Panel Common */
+        .panel {
+            background: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            border-radius: 16px;
+            backdrop-filter: blur(12px);
+            padding: 1.5rem;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        }
+
+        .panel-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: 1.25rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            color: #ffffff;
+            border-left: 4px solid #6366f1;
+            padding-left: 0.75rem;
+        }
+
+        /* Node status cards */
+        .nodes-container {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        @media (min-width: 640px) {
+            .nodes-container {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
+
+        .node-card {
+            background: rgba(31, 41, 55, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 14px;
+            padding: 1.25rem;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .node-card.replica-target {
+            border: 2px solid #818cf8;
+            box-shadow: 0 0 15px rgba(99, 102, 241, 0.2);
+        }
+
+        .node-card.replica-target::after {
+            content: 'REPLICA TARGET';
+            position: absolute;
+            top: 6px;
+            right: 6px;
+            background: #818cf8;
+            color: #111827;
+            font-size: 0.65rem;
+            font-weight: 700;
+            padding: 2px 6px;
+            border-radius: 4px;
+            letter-spacing: 0.5px;
+        }
+
+        .node-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .node-name {
+            font-weight: 700;
+            font-size: 1.1rem;
+            letter-spacing: -0.3px;
+        }
+
+        .status-badge {
+            padding: 0.25rem 0.6rem;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+        }
+
+        .status-badge::before {
+            content: '';
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+        }
+
+        /* Dynamic classes based on state */
+        .node-card.active {
+            box-shadow: inset 0 0 12px rgba(16, 185, 129, 0.05);
+        }
+        .node-card.active .status-badge {
+            background: rgba(16, 185, 129, 0.15);
+            color: var(--color-active);
+        }
+        .node-card.active .status-badge::before {
+            background: var(--color-active);
+            box-shadow: var(--glow-green);
+            animation: pulse-glow 2s infinite;
+        }
+
+        .node-card.down {
+            box-shadow: inset 0 0 12px rgba(239, 68, 68, 0.05);
+            border-color: rgba(239, 68, 68, 0.2);
+        }
+        .node-card.down .status-badge {
+            background: rgba(239, 68, 68, 0.15);
+            color: var(--color-down);
+        }
+        .node-card.down .status-badge::before {
+            background: var(--color-down);
+            box-shadow: var(--glow-red);
+            animation: pulse-glow-red 1.5s infinite;
+        }
+
+        .node-card.recovering {
+            box-shadow: inset 0 0 12px rgba(245, 158, 11, 0.05);
+            border-color: rgba(245, 158, 11, 0.2);
+        }
+        .node-card.recovering .status-badge {
+            background: rgba(245, 158, 11, 0.15);
+            color: var(--color-recovering);
+        }
+        .node-card.recovering .status-badge::before {
+            background: var(--color-recovering);
+            box-shadow: var(--glow-yellow);
+            animation: pulse-glow-yellow 1s infinite;
+        }
+
+        @keyframes pulse-glow {
+            0% { transform: scale(0.9); opacity: 0.6; }
+            50% { transform: scale(1.2); opacity: 1; box-shadow: 0 0 12px var(--color-active); }
+            100% { transform: scale(0.9); opacity: 0.6; }
+        }
+        @keyframes pulse-glow-red {
+            0% { transform: scale(0.9); opacity: 0.6; }
+            50% { transform: scale(1.2); opacity: 1; box-shadow: 0 0 12px var(--color-down); }
+            100% { transform: scale(0.9); opacity: 0.6; }
+        }
+        @keyframes pulse-glow-yellow {
+            0% { transform: scale(0.9); opacity: 0.6; }
+            50% { transform: scale(1.2); opacity: 1; box-shadow: 0 0 12px var(--color-recovering); }
+            100% { transform: scale(0.9); opacity: 0.6; }
+        }
+
+        /* Inner databases preview */
+        .node-db-view {
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 8px;
+            padding: 0.75rem;
+            max-height: 160px;
+            overflow-y: auto;
+            font-size: 0.8rem;
+            border: 1px solid rgba(255, 255, 255, 0.03);
+        }
+
+        .db-section-title {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            color: #6b7280;
+            font-weight: 700;
+            margin-bottom: 0.4rem;
+            letter-spacing: 0.5px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .db-list {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 0.3rem;
+            margin-bottom: 0.8rem;
+        }
+
+        .db-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.25rem 0.4rem;
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 4px;
+            border-left: 2.5px solid #4b5563;
+        }
+        .db-item.stock-item {
+            border-left-color: #3b82f6;
+        }
+        .db-item.log-item {
+            border-left-color: #ef4444;
+            background: rgba(239, 68, 68, 0.03);
+        }
+
+        .db-item span {
+            font-family: var(--font-code);
+        }
+
+        .db-empty {
+            color: #4b5563;
+            font-style: italic;
+            font-size: 0.75rem;
+            padding: 0.2rem 0.4rem;
+        }
+
+        /* Action Buttons on Node Cards */
+        .node-actions {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.5rem;
+            margin-top: auto;
+        }
+
+        .btn-sim {
+            padding: 0.4rem;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            cursor: pointer;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            background: rgba(255, 255, 255, 0.05);
+            color: #e5e7eb;
+        }
+
+        .btn-sim:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .btn-sim.btn-offline {
+            color: #fca5a5;
+            background: rgba(239, 68, 68, 0.05);
+            border-color: rgba(239, 68, 68, 0.2);
+        }
+        .btn-sim.btn-offline:hover {
+            background: rgba(239, 68, 68, 0.15);
+        }
+
+        .btn-sim.btn-online {
+            color: #a7f3d0;
+            background: rgba(16, 185, 129, 0.05);
+            border-color: rgba(16, 185, 129, 0.2);
+        }
+        .btn-sim.btn-online:hover {
+            background: rgba(16, 185, 129, 0.15);
+        }
+
+        /* Input control panels */
+        .ops-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 1.5rem;
+        }
+
+        @media (min-width: 640px) {
+            .ops-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+
+        .op-card {
+            background: rgba(31, 41, 55, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.04);
+            border-radius: 12px;
+            padding: 1.25rem;
+        }
+
+        .op-title {
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            color: #e5e7eb;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .form-group {
+            margin-bottom: 1rem;
+            position: relative;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 0.8rem;
+            color: #9ca3af;
+            margin-bottom: 0.4rem;
+            font-weight: 500;
+        }
+
+        .form-control {
+            width: 100%;
+            background: rgba(17, 24, 39, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #ffffff;
+            border-radius: 8px;
+            padding: 0.6rem 0.8rem;
+            font-family: var(--font-main);
+            font-size: 0.9rem;
+        }
+
+        .form-control:focus {
+            outline: none;
+            border-color: #6366f1;
+            box-shadow: 0 0 10px rgba(99, 102, 241, 0.2);
+        }
+
+        select.form-control {
+            cursor: pointer;
+        }
+
+        /* Replica set preview helper */
+        .replica-preview-info {
+            font-size: 0.75rem;
+            color: #a5b4fc;
+            background: rgba(99, 102, 241, 0.08);
+            border: 1px dashed rgba(99, 102, 241, 0.3);
+            padding: 0.5rem 0.75rem;
+            border-radius: 6px;
+            margin-top: 0.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .replica-preview-info span.nodes-list {
+            font-family: var(--font-code);
+            font-weight: 700;
+            background: rgba(99, 102, 241, 0.2);
+            padding: 0.1rem 0.4rem;
+            border-radius: 4px;
+        }
+
+        .btn-action {
+            width: 100%;
+            padding: 0.7rem;
+            background: linear-gradient(135deg, #6366f1, #4f46e5);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 0.9rem;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+        }
+
+        .btn-action:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 15px rgba(99, 102, 241, 0.4);
+        }
+
+        .btn-action:active {
+            transform: translateY(1px);
+        }
+
+        /* Read Results Panel */
+        .result-panel {
+            margin-top: 1.25rem;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 8px;
+            padding: 1rem;
+            border: 1px solid rgba(255, 255, 255, 0.03);
+            display: none;
+        }
+
+        .result-panel.show {
+            display: block;
+            animation: fadeIn 0.4s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .result-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.5rem;
+            font-size: 0.85rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+            padding-bottom: 0.4rem;
+        }
+
+        .result-row:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+            padding-bottom: 0;
+        }
+
+        .result-label {
+            color: #9ca3af;
+            font-weight: 500;
+        }
+
+        .result-value {
+            color: #ffffff;
+            font-weight: 600;
+            font-family: var(--font-code);
+        }
+        .result-value.highlight-node {
+            color: #a5b4fc;
+            background: rgba(99, 102, 241, 0.15);
+            padding: 0.1rem 0.4rem;
+            border-radius: 4px;
+        }
+
+        /* Console log panel */
+        .console-panel {
+            margin-top: 2rem;
+            background: #030712;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 1rem;
+            height: 250px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .console-header {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            font-weight: 700;
+            color: #4b5563;
+            letter-spacing: 1px;
+            margin-bottom: 0.75rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .btn-clear-console {
+            background: none;
+            border: none;
+            color: #6b7280;
+            cursor: pointer;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .btn-clear-console:hover {
+            color: #f3f4f6;
+        }
+
+        .console-output {
+            flex: 1;
+            overflow-y: auto;
+            font-family: var(--font-code);
+            font-size: 0.8rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.4rem;
+            padding-right: 0.5rem;
+        }
+
+        .console-line {
+            display: flex;
+            gap: 0.5rem;
+            line-height: 1.4;
+        }
+
+        .console-timestamp {
+            color: #6b7280;
+            flex-shrink: 0;
+        }
+
+        .console-text {
+            word-break: break-all;
+        }
+
+        .console-text.info { color: #818cf8; }
+        .console-text.success { color: #34d399; }
+        .console-text.warn { color: #fbbf24; }
+        .console-text.error { color: #f87171; }
+
+        /* Guide instructions card */
+        .guide-card {
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.05) 0%, rgba(16, 185, 129, 0.02) 100%);
+            border: 1px solid rgba(99, 102, 241, 0.15);
+            border-radius: 16px;
+            padding: 1.5rem;
+            height: fit-content;
+        }
+
+        .guide-card h3 {
+            font-size: 1.1rem;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: #a5b4fc;
+        }
+
+        .guide-steps {
+            display: flex;
+            flex-direction: column;
+            gap: 0.8rem;
+            font-size: 0.85rem;
+            line-height: 1.5;
+            color: #d1d5db;
+        }
+
+        .guide-step-item {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .guide-num {
+            background: rgba(99, 102, 241, 0.2);
+            color: #a5b4fc;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+            font-weight: 700;
+            flex-shrink: 0;
+            margin-top: 0.1rem;
+        }
+
+        .highlight-bold {
+            color: #ffffff;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <div class="ambient-glow"></div>
+    <div class="ambient-glow-2"></div>
+
+    <div class="container">
+        <header>
+            <div class="logo-section">
+                <h1>ROWA-A Distributed Database Visualizer</h1>
+                <p>Mô phỏng Giao thức ROWA-A với Full Replication & Partial Replication (Modulo Hash)</p>
+            </div>
+            <div class="badge-mode">Active Status Running</div>
+        </header>
+
+        <div class="dashboard-grid">
+            <!-- Left Side: Cluster map & Operations -->
+            <div style="display: flex; flex-direction: column; gap: 2rem;">
+                
+                <!-- Database Node status -->
+                <div class="panel">
+                    <div class="panel-title">
+                        <span>Trạng thái Cụm Node DB (MySQL)</span>
+                        <span style="font-size: 0.8rem; font-weight: normal; color: #9ca3af;">(Cập nhật tự động: 1s)</span>
+                    </div>
+
+                    <div class="nodes-container">
+                        <!-- Node 1 -->
+                        <div class="node-card active" id="card-NODE_1">
+                            <div class="node-header">
+                                <span class="node-name">NODE 1</span>
+                                <span class="status-badge">Active</span>
+                            </div>
+                            <div class="node-db-view">
+                                <div class="db-section-title">📦 Stocks (stock_levels)</div>
+                                <ul class="db-list" id="stocks-NODE_1">
+                                    <li class="db-empty">Đang tải...</li>
+                                </ul>
+                                <div class="db-section-title">📋 Logs (recovery_log)</div>
+                                <ul class="db-list" id="logs-NODE_1">
+                                    <li class="db-empty">Đang tải...</li>
+                                </ul>
+                            </div>
+                            <div class="node-actions">
+                                <button class="btn-sim btn-offline" onclick="nodeOffline('NODE_1')">Offline</button>
+                                <button class="btn-sim btn-online" onclick="nodeOnline('NODE_1')">Online</button>
+                            </div>
+                        </div>
+
+                        <!-- Node 2 -->
+                        <div class="node-card active" id="card-NODE_2">
+                            <div class="node-header">
+                                <span class="node-name">NODE 2</span>
+                                <span class="status-badge">Active</span>
+                            </div>
+                            <div class="node-db-view">
+                                <div class="db-section-title">📦 Stocks (stock_levels)</div>
+                                <ul class="db-list" id="stocks-NODE_2">
+                                    <li class="db-empty">Đang tải...</li>
+                                </ul>
+                                <div class="db-section-title">📋 Logs (recovery_log)</div>
+                                <ul class="db-list" id="logs-NODE_2">
+                                    <li class="db-empty">Đang tải...</li>
+                                </ul>
+                            </div>
+                            <div class="node-actions">
+                                <button class="btn-sim btn-offline" onclick="nodeOffline('NODE_2')">Offline</button>
+                                <button class="btn-sim btn-online" onclick="nodeOnline('NODE_2')">Online</button>
+                            </div>
+                        </div>
+
+                        <!-- Node 3 -->
+                        <div class="node-card active" id="card-NODE_3">
+                            <div class="node-header">
+                                <span class="node-name">NODE 3</span>
+                                <span class="status-badge">Active</span>
+                            </div>
+                            <div class="node-db-view">
+                                <div class="db-section-title">📦 Stocks (stock_levels)</div>
+                                <ul class="db-list" id="stocks-NODE_3">
+                                    <li class="db-empty">Đang tải...</li>
+                                </ul>
+                                <div class="db-section-title">📋 Logs (recovery_log)</div>
+                                <ul class="db-list" id="logs-NODE_3">
+                                    <li class="db-empty">Đang tải...</li>
+                                </ul>
+                            </div>
+                            <div class="node-actions">
+                                <button class="btn-sim btn-offline" onclick="nodeOffline('NODE_3')">Offline</button>
+                                <button class="btn-sim btn-online" onclick="nodeOnline('NODE_3')">Online</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Operations center -->
+                <div class="panel">
+                    <div class="panel-title">Bảng Điều Khiển Giao Dịch</div>
+                    
+                    <div class="ops-grid">
+                        <!-- Write operations -->
+                        <div class="op-card">
+                            <div class="op-title">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
+                                <span>Ghi Dữ Liệu (Write Stock)</span>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label>Chế độ sao chép (Replication Mode)</label>
+                                <select class="form-control" id="write-mode" onchange="updateReplicaPreviews()">
+                                    <option value="FULL">FULL REPLICATION (Tất cả Node)</option>
+                                    <option value="PARTIAL">PARTIAL REPLICATION (2/3 Node - Modulo Hash)</option>
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Mã sản phẩm (SKU ID)</label>
+                                <input type="text" class="form-control" id="write-sku" placeholder="Ví dụ: SKU-100, APPLE, SAMSUNG" value="SKU-100" onkeyup="updateReplicaPreviews()">
+                                <div class="replica-preview-info">
+                                    <span>Target Replica Set:</span>
+                                    <span class="nodes-list" id="write-replica-preview">NODE_1, NODE_2, NODE_3</span>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Số lượng (Quantity)</label>
+                                <input type="number" class="form-control" id="write-quantity" placeholder="Số lượng sản phẩm" value="15">
+                            </div>
+
+                            <button class="btn-action" onclick="performWrite()">Thực Hiện Ghi (ROWA-A Write)</button>
+                        </div>
+
+                        <!-- Read operations -->
+                        <div class="op-card">
+                            <div class="op-title">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                                <span>Đọc Dữ Liệu (Read Stock)</span>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Chế độ đọc dữ liệu (Read Mode)</label>
+                                <select class="form-control" id="read-mode" onchange="updateReplicaPreviews()">
+                                    <option value="FULL">FULL REPLICATION</option>
+                                    <option value="PARTIAL">PARTIAL REPLICATION</option>
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Mã sản phẩm cần đọc (SKU ID)</label>
+                                <input type="text" class="form-control" id="read-sku" placeholder="Nhập SKU sản phẩm" value="SKU-100" onkeyup="updateReplicaPreviews()">
+                                <div class="replica-preview-info">
+                                    <span>Query Target Set:</span>
+                                    <span class="nodes-list" id="read-replica-preview">NODE_1, NODE_2, NODE_3</span>
+                                </div>
+                            </div>
+
+                            <button class="btn-action" style="background: linear-gradient(135deg, #3b82f6, #2563eb); box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);" onclick="performRead()">Thực Hiện Đọc (Read One)</button>
+
+                            <div class="result-panel" id="read-results">
+                                <div class="result-row">
+                                    <span class="result-label">Mã SKU:</span>
+                                    <span class="result-value" id="res-sku">-</span>
+                                </div>
+                                <div class="result-row">
+                                    <span class="result-label">Số lượng trong kho:</span>
+                                    <span class="result-value" id="res-qty">-</span>
+                                </div>
+                                <div class="result-row">
+                                    <span class="result-label">Warehouse ID:</span>
+                                    <span class="result-value" id="res-wh">-</span>
+                                </div>
+                                <div class="result-row">
+                                    <span class="result-label">Phục vụ bởi Node:</span>
+                                    <span class="result-value highlight-node" id="res-node">-</span>
+                                </div>
+                                <div class="result-row">
+                                    <span class="result-label">Replica Set thiết kế:</span>
+                                    <span class="result-value" id="res-replicas" style="color: #a5b4fc;">-</span>
+                                </div>
+                                <div class="result-row">
+                                    <span class="result-label">Lưu thực tế tại các node:</span>
+                                    <span class="result-value" id="res-actual" style="color: #34d399;">-</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Right Side: Guide Instructions & System Console logs -->
+            <div style="display: flex; flex-direction: column; gap: 2rem;">
+                
+                <!-- Guide card -->
+                <div class="guide-card">
+                    <h3>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#a5b4fc" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9m-13.73 13a3 3 0 0 0 5.46 0"/></svg>
+                        <span>Cách Thử Nghiệm Kịch Bản</span>
+                    </h3>
+                    <div class="guide-steps">
+                        <div class="guide-step-item">
+                            <span class="guide-num">1</span>
+                            <div>
+                                <span class="highlight-bold">Chạy ở chế độ FULL Replication:</span> Ghi một SKU (ví dụ: `APPLE`) với mode FULL. Bạn sẽ thấy SKU xuất hiện trên cả <span class="highlight-bold">3 Node</span>.
+                            </div>
+                        </div>
+                        <div class="guide-step-item">
+                            <span class="guide-num">2</span>
+                            <div>
+                                <span class="highlight-bold">Chạy ở chế độ PARTIAL Replication:</span> Ghi SKU `SKU-100` với mode PARTIAL. SKU sẽ chỉ được ghi vào <span class="highlight-bold">NODE_1 và NODE_2</span> (do hash % 3 == 0). NODE_3 hoàn toàn không lưu trữ!
+                            </div>
+                        </div>
+                        <div class="guide-step-item">
+                            <span class="guide-num">3</span>
+                            <div>
+                                <span class="highlight-bold">Giả lập Node Sập (Offline):</span> Click nút <span class="highlight-bold" style="color: var(--color-down);">Offline</span> tại NODE_2. Trạng thái của NODE_2 sẽ chuyển sang <span class="highlight-bold" style="color: var(--color-down);">DOWN</span>.
+                            </div>
+                        </div>
+                        <div class="guide-step-item">
+                            <span class="guide-num">4</span>
+                            <div>
+                                <span class="highlight-bold">Ghi dữ liệu khi có node sập (ROWA-A):</span> Ghi lại SKU `SKU-100` khi NODE_2 đang DOWN. Hệ thống sẽ ghi thành công vào NODE_1, đồng thời sinh ra <span class="highlight-bold" style="color: var(--color-down);">Recovery Log</span> tại NODE_1 để lưu vết cần khôi phục cho NODE_2.
+                            </div>
+                        </div>
+                        <div class="guide-step-item">
+                            <span class="guide-num">5</span>
+                            <div>
+                                <span class="highlight-bold">Khôi phục tự động (Recovery):</span> Click nút <span class="highlight-bold" style="color: var(--color-active);">Online</span> tại NODE_2. Bạn sẽ thấy NODE_2 chuyển sang trạng thái <span class="highlight-bold" style="color: var(--color-recovering);">RECOVERING</span>. Trong vòng vài giây, các bản ghi cũ từ NODE_1 sẽ tự động đồng bộ trả lại cho NODE_2, và nhật ký Recovery Log trên NODE_1 sẽ tự động biến mất! NODE_2 trở lại <span class="highlight-bold" style="color: var(--color-active);">ACTIVE</span>.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Console console logs -->
+                <div class="console-panel">
+                    <div class="console-header">
+                        <span>Nhật ký Giao dịch (Console Logs)</span>
+                        <button class="btn-clear-console" onclick="clearConsole()">Xoá nhật ký</button>
+                    </div>
+                    <div class="console-output" id="console-output">
+                        <div class="console-line">
+                            <span class="console-timestamp">[Hệ Thống]</span>
+                            <span class="console-text info">Hệ thống Visualizer đã sẵn sàng. Trạng thái Cluster được theo dõi trực tiếp.</span>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // JS SKU consistent/modulo hashing to match backend
+        function getSkuHash(sku) {
+            let hash = 0;
+            if (!sku || sku.trim() === "") return 0;
+            for (let i = 0; i < sku.length; i++) {
+                let char = sku.charCodeAt(i);
+                hash = ((hash << 5) - hash) + char;
+                hash = hash & hash;
+            }
+            return Math.abs(hash);
+        }
+
+        function getReplicaSet(sku, mode) {
+            if (mode === "PARTIAL") {
+                if (!sku) return ["NODE_1", "NODE_2"];
+                let hash = getSkuHash(sku);
+                let subset = hash % 3;
+                if (subset === 0) return ["NODE_1", "NODE_2"];
+                if (subset === 1) return ["NODE_2", "NODE_3"];
+                return ["NODE_3", "NODE_1"];
+            } else {
+                return ["NODE_1", "NODE_2", "NODE_3"];
+            }
+        }
+
+        // Live calculation of replica set target on typing
+        function updateReplicaPreviews() {
+            // Write input preview
+            const writeSku = document.getElementById('write-sku').value;
+            const writeMode = document.getElementById('write-mode').value;
+            const writeReplicas = getReplicaSet(writeSku, writeMode);
+            document.getElementById('write-replica-preview').innerText = writeReplicas.join(', ');
+
+            // Read input preview
+            const readSku = document.getElementById('read-sku').value;
+            const readMode = document.getElementById('read-mode').value;
+            const readReplicas = getReplicaSet(readSku, readMode);
+            document.getElementById('read-replica-preview').innerText = readReplicas.join(', ');
+
+            // Visual indicator of targeted nodes
+            document.querySelectorAll('.node-card').forEach(card => {
+                card.classList.remove('replica-target');
+            });
+            writeReplicas.forEach(nodeId => {
+                const card = document.getElementById('card-' + nodeId);
+                if (card) card.classList.add('replica-target');
+            });
+        }
+
+        // Logging helper
+        function logToConsole(message, type = 'info') {
+            const output = document.getElementById('console-output');
+            const now = new Date();
+            const timestamp = `[${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}]`;
+            
+            const line = document.createElement('div');
+            line.className = 'console-line';
+            line.innerHTML = `
+                <span class="console-timestamp">${timestamp}</span>
+                <span class="console-text ${type}">${message}</span>
+            `;
+            
+            output.appendChild(line);
+            output.scrollTop = output.scrollHeight;
+        }
+
+        function clearConsole() {
+            document.getElementById('console-output').innerHTML = '';
+            logToConsole('Đã xoá console.', 'info');
+        }
+
+        // Simulating node status
+        async function nodeOffline(nodeId) {
+            try {
+                const response = await fetch(`/api/node/offline/${nodeId}`, { method: 'POST' });
+                const msg = await response.text();
+                logToConsole(msg, 'warn');
+                fetchStatus();
+            } catch (err) {
+                logToConsole(`Lỗi khi tắt node ${nodeId}: ${err.message}`, 'error');
+            }
+        }
+
+        async function nodeOnline(nodeId) {
+            try {
+                const response = await fetch(`/api/node/online/${nodeId}`, { method: 'POST' });
+                const msg = await response.text();
+                logToConsole(msg, 'success');
+                fetchStatus();
+            } catch (err) {
+                logToConsole(`Lỗi khi mở lại node ${nodeId}: ${err.message}`, 'error');
+            }
+        }
+
+        // Operations
+        async function performWrite() {
+            const sku = document.getElementById('write-sku').value;
+            const quantity = document.getElementById('write-quantity').value;
+            const mode = document.getElementById('write-mode').value;
+
+            if (!sku || !quantity) {
+                logToConsole('Thiếu thông tin SKU hoặc số lượng để ghi.', 'error');
+                return;
+            }
+
+            logToConsole(`🚀 Đang gửi yêu cầu ghi Stock: SKU = ${sku}, Qty = ${quantity}, Mode = ${mode}...`, 'info');
+
+            try {
+                const response = await fetch(`/api/stock?sku=${encodeURIComponent(sku)}&quantity=${quantity}&replicationMode=${mode}`, {
+                    method: 'POST'
+                });
+
+                if (response.ok) {
+                    const text = await response.text();
+                    logToConsole(`✅ Thành công: ${text}`, 'success');
+                } else {
+                    const errText = await response.text();
+                    logToConsole(`❌ Ghi thất bại: ${errText || 'Lỗi không xác định'}`, 'error');
+                }
+            } catch (err) {
+                logToConsole(`❌ Lỗi kết nối máy chủ: ${err.message}`, 'error');
+            }
+            fetchStatus();
+        }
+
+        async function performRead() {
+            const sku = document.getElementById('read-sku').value;
+            const mode = document.getElementById('read-mode').value;
+
+            if (!sku) {
+                logToConsole('Thiếu mã SKU để đọc.', 'error');
+                return;
+            }
+
+            logToConsole(`🔍 Đang gửi yêu cầu đọc Stock: SKU = ${sku}, Mode = ${mode}...`, 'info');
+
+            try {
+                const response = await fetch(`/api/stock/${encodeURIComponent(sku)}?replicationMode=${mode}`);
+
+                if (response.ok) {
+                    const data = await response.json();
+                    logToConsole(`✅ Đọc thành công! SKU = ${data.sku}, Qty = ${data.quantity}, Served by = ${data.servedByNode}`, 'success');
+                    
+                    document.getElementById('res-sku').innerText = data.sku;
+                    document.getElementById('res-qty').innerText = data.quantity;
+                    document.getElementById('res-wh').innerText = data.warehouseId;
+                    document.getElementById('res-node').innerText = data.servedByNode;
+                    document.getElementById('res-replicas').innerText = (data.replicaSet || []).join(', ');
+                    document.getElementById('res-actual').innerText = (data.actualNodes || []).join(', ');
+                    
+                    document.getElementById('read-results').classList.add('show');
+                } else {
+                    const errText = await response.text();
+                    logToConsole(`❌ Đọc thất bại: ${errText || 'Lỗi không xác định'}`, 'error');
+                    document.getElementById('read-results').classList.remove('show');
+                }
+            } catch (err) {
+                logToConsole(`❌ Lỗi kết nối máy chủ: ${err.message}`, 'error');
+                document.getElementById('read-results').classList.remove('show');
+            }
+        }
+
+        // Periodic Status Polling
+        async function fetchStatus() {
+            try {
+                const res = await fetch('/api/status');
+                const statusMap = await res.json();
+
+                for (const nodeId of ['NODE_1', 'NODE_2', 'NODE_3']) {
+                    const card = document.getElementById(`card-${nodeId}`);
+                    const statusText = statusMap[nodeId] || 'DOWN';
+
+                    // Update class names and badges
+                    card.className = `node-card ${statusText.toLowerCase()}`;
+                    card.querySelector('.status-badge').innerText = statusText;
+
+                    // Fetch actual database stocks on that node
+                    fetchNodeStocks(nodeId);
+                    // Fetch actual database logs on that node
+                    fetchNodeLogs(nodeId);
+                }
+                updateReplicaPreviews();
+            } catch (err) {
+                // Ignore silent polling network errors
+            }
+        }
+
+        async function fetchNodeStocks(nodeId) {
+            try {
+                const res = await fetch(`/api/node/stocks/${nodeId}`);
+                if (!res.ok) throw new Error();
+                const stocks = await res.json();
+
+                const container = document.getElementById(`stocks-${nodeId}`);
+                if (stocks.length === 0) {
+                    container.innerHTML = '<li class="db-empty">Không có sản phẩm</li>';
+                } else {
+                    container.innerHTML = stocks.map(item => `
+                        <li class="db-item stock-item">
+                            <span>${item.sku}</span>
+                            <span><b>${item.quantity}</b></span>
+                        </li>
+                    `).join('');
+                }
+            } catch (e) {
+                document.getElementById(`stocks-${nodeId}`).innerHTML = '<li class="db-empty" style="color:var(--color-down);">Offline (Không thể kết nối)</li>';
+            }
+        }
+
+        async function fetchNodeLogs(nodeId) {
+            try {
+                const res = await fetch(`/api/node/logs/${nodeId}`);
+                if (!res.ok) throw new Error();
+                const logs = await res.json();
+
+                const container = document.getElementById(`logs-${nodeId}`);
+                if (logs.length === 0) {
+                    container.innerHTML = '<li class="db-empty">Không có nhật ký</li>';
+                } else {
+                    container.innerHTML = logs.map(item => `
+                        <li class="db-item log-item">
+                            <span style="font-size: 0.75rem;">👉 ${item.targetNode}</span>
+                            <span style="font-size: 0.75rem;"><b>${item.sku} (${item.quantity})</b></span>
+                        </li>
+                    `).join('');
+                }
+            } catch (e) {
+                document.getElementById(`logs-${nodeId}`).innerHTML = '<li class="db-empty" style="color:var(--color-down);">Offline (Không thể kết nối)</li>';
+            }
+        }
+
+        // Initialize and start polling
+        updateReplicaPreviews();
+        fetchStatus();
+        setInterval(fetchStatus, 1500); // Poll status every 1.5 seconds
+    </script>
+</body>
+</html>

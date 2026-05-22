@@ -29,10 +29,23 @@ public interface Node1Repository extends JpaRepository<StockLevel, String> {
     @Query(value = "SELECT * FROM recovery_log WHERE target_node = :targetNode", nativeQuery = true)
     List<RecoveryLog> findRecoveryLogs(@Param("targetNode") String targetNode);
 
+    @Query(value = "SELECT * FROM recovery_log", nativeQuery = true)
+    List<RecoveryLog> findAllRecoveryLogs();
+
     @Modifying
     @Transactional
     @Query(value = "DELETE FROM recovery_log WHERE log_id = :logId", nativeQuery = true)
     void deleteRecoveryLog(@Param("logId") Long logId);
+
+    @Modifying
+    @Transactional
+    @Query(value = "RENAME TABLE stock_levels TO stock_levels_offline", nativeQuery = true)
+    void setOffline();
+
+    @Modifying
+    @Transactional
+    @Query(value = "RENAME TABLE stock_levels_offline TO stock_levels", nativeQuery = true)
+    void setOnline();
 
     @Query(value = """
         SELECT CASE

@@ -3,7 +3,9 @@ package com.example.distributedsystemproject.component;
 import com.example.distributedsystemproject.repository.node1.Node1Repository;
 import com.example.distributedsystemproject.repository.node2.Node2Repository;
 import com.example.distributedsystemproject.repository.node3.Node3Repository;
+import com.example.distributedsystemproject.service.CoordinatorService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -15,6 +17,8 @@ public class FailureDetectorComponent {
     @Autowired private Node1Repository node1Repository;
     @Autowired private Node2Repository node2Repository;
     @Autowired private Node3Repository node3Repository;
+    @Autowired @Lazy
+    private CoordinatorService coordinatorService;
 
     // Lưu trạng thái trên RAM (ACTIVE, DOWN, RECOVERING)
     public final ConcurrentHashMap<String, String> nodeStatusMap = new ConcurrentHashMap<>();
@@ -44,10 +48,18 @@ public class FailureDetectorComponent {
         } catch (Exception e) {
             alive = false; // Database is down/inaccessible
         }
-        if (!alive && !"DOWN".equals(nodeStatusMap.get(nodeId))) {
+        String currentStatus = nodeStatusMap.get(nodeId);
+
+        if (!alive && !"DOWN".equals(currentStatus)) {
             nodeStatusMap.put(nodeId, "DOWN");
+            return;
         }
-        if (alive && !"ACTIVE".equals(nodeStatusMap.get(nodeId)) && !"RECOVERING".equals(nodeStatusMap.get(nodeId))) {
+
+        if (alive && "DOWN".equals(currentStatus)) {
+            coordinatorService.processRecovery(nodeId);
+            return;
+        }
+        if (alive && !"ACTIVE".equals(currentStatus) && !"RECOVERING".equals(currentStatus)) {
             nodeStatusMap.put(nodeId, "ACTIVE");
         }
     }
