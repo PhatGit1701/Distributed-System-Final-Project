@@ -7,6 +7,9 @@ import com.example.distributedsystemproject.model.StockView;
 import com.example.distributedsystemproject.service.CoordinatorService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 
 import java.util.List;
 import java.util.Map;
@@ -60,5 +63,26 @@ public class DemoController {
     @GetMapping("/node/logs/{nodeId}")
     public List<RecoveryLog> getNodeRecoveryLogs(@PathVariable String nodeId) {
         return coordinatorService.getNodeRecoveryLogs(nodeId);
+    }
+
+    @ExceptionHandler(RuntimeException.class)
+    public ResponseEntity<String> handleRuntimeException(RuntimeException ex) {
+        String msg = ex.getMessage();
+        if ("Không còn server nào hoạt động".equals(msg)) {
+            return ResponseEntity
+                .status(HttpStatus.SERVICE_UNAVAILABLE)
+                .contentType(MediaType.TEXT_PLAIN)
+                .body(msg);
+        } else if ("Dữ liệu không tồn tại trong database".equals(msg)) {
+            return ResponseEntity
+                .status(HttpStatus.NOT_FOUND)
+                .contentType(MediaType.TEXT_PLAIN)
+                .body(msg);
+        }
+        // Fallback for other runtime exceptions (e.g. write failures)
+        return ResponseEntity
+            .status(HttpStatus.INTERNAL_SERVER_ERROR)
+            .contentType(MediaType.TEXT_PLAIN)
+            .body(msg != null ? msg : "Lỗi hệ thống không xác định.");
     }
 }

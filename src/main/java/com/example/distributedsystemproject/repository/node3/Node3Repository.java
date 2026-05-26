@@ -15,13 +15,13 @@ public interface Node3Repository extends JpaRepository<StockLevel, String> {
 
     @Modifying
     @Transactional
-    @Query(value = "INSERT INTO stock_levels (sku, quantity, warehouse_id) VALUES (:sku, :quantity, :warehouseId) ON DUPLICATE KEY UPDATE quantity = :quantity", nativeQuery = true)
-    void upsertStock(@Param("sku") String sku, @Param("quantity") int quantity, @Param("warehouseId") String warehouseId);
+    @Query(value = "INSERT INTO stock_levels (sku, quantity, warehouse_id, updated_at) VALUES (:sku, :quantity, :warehouseId, :updatedAt) ON DUPLICATE KEY UPDATE quantity = :quantity, updated_at = :updatedAt", nativeQuery = true)
+    void upsertStock(@Param("sku") String sku, @Param("quantity") int quantity, @Param("warehouseId") String warehouseId, @Param("updatedAt") java.time.LocalDateTime updatedAt);
 
     @Modifying
     @Transactional
-    @Query(value = "INSERT INTO recovery_log (target_node, sku, quantity) VALUES (:targetNode, :sku, :quantity)", nativeQuery = true)
-    void insertRecoveryLog(@Param("targetNode") String targetNode, @Param("sku") String sku, @Param("quantity") int quantity);
+    @Query(value = "INSERT INTO recovery_log (event_id, target_node, sku, quantity, warehouse_id) VALUES (UUID(), :targetNode, :sku, :quantity, :warehouseId)", nativeQuery = true)
+    void insertRecoveryLog(@Param("targetNode") String targetNode, @Param("sku") String sku, @Param("quantity") int quantity, @Param("warehouseId") String warehouseId);
 
     @Query(value = "SELECT * FROM stock_levels WHERE sku = :sku", nativeQuery = true)
     Optional<StockLevel> findStockBySku(@Param("sku") String sku);

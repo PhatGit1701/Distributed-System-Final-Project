@@ -9,11 +9,13 @@ import com.example.distributedsystemproject.repository.node2.Node2Repository;
 import com.example.distributedsystemproject.repository.node3.Node3Repository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Async;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.time.LocalDateTime;
 
 @Service
 public class CoordinatorService {
@@ -23,12 +25,12 @@ public class CoordinatorService {
     @Autowired private Node3Repository node3Repository;
     @Autowired private FailureDetectorComponent failureDetectorService;
 
-    private void upsert(String nodeId, String sku, int quantity, String warehouseId) {
-        switch (nodeId) { case "NODE_1" -> node1Repository.upsertStock(sku, quantity, warehouseId); case "NODE_2" -> node2Repository.upsertStock(sku, quantity, warehouseId); case "NODE_3" -> node3Repository.upsertStock(sku, quantity, warehouseId); }
+    private void upsert(String nodeId, String sku, int quantity, String warehouseId, LocalDateTime updatedAt) {
+        switch (nodeId) { case "NODE_1" -> node1Repository.upsertStock(sku, quantity, warehouseId, updatedAt); case "NODE_2" -> node2Repository.upsertStock(sku, quantity, warehouseId, updatedAt); case "NODE_3" -> node3Repository.upsertStock(sku, quantity, warehouseId, updatedAt); }
     }
 
-    private void insertLog(String nodeId, String targetNode, String sku, int quantity) {
-        switch (nodeId) { case "NODE_1" -> node1Repository.insertRecoveryLog(targetNode, sku, quantity); case "NODE_2" -> node2Repository.insertRecoveryLog(targetNode, sku, quantity); case "NODE_3" -> node3Repository.insertRecoveryLog(targetNode, sku, quantity); }
+    private void insertLog(String nodeId, String targetNode, String sku, int quantity, String warehouseId) {
+        switch (nodeId) { case "NODE_1" -> node1Repository.insertRecoveryLog(targetNode, sku, quantity, warehouseId); case "NODE_2" -> node2Repository.insertRecoveryLog(targetNode, sku, quantity, warehouseId); case "NODE_3" -> node3Repository.insertRecoveryLog(targetNode, sku, quantity, warehouseId); }
     }
 
     private Optional<StockLevel> findStock(String nodeId, String sku) {
@@ -85,7 +87,7 @@ public class CoordinatorService {
 
         for (String activeNode : activeNodes) {
             try {
-                upsert(activeNode, sku, quantity, warehouseId);
+                upsert(activeNode, sku, quantity, warehouseId, LocalDateTime.now());
                 successfulNodes.add(activeNode);
             } catch (Exception ex) {
                 failedDuringWrite.add(activeNode);
@@ -103,7 +105,7 @@ public class CoordinatorService {
         for (String successfulNode : successfulNodes) {
             for (String unavailableNode : unavailableNodes) {
                 if (!successfulNode.equals(unavailableNode)) {
-                    insertLog(successfulNode, unavailableNode, sku, quantity);
+                    insertLog(successfulNode, unavailableNode, sku, quantity, warehouseId);
                 }
             }
         }
@@ -115,8 +117,21 @@ public class CoordinatorService {
 
     public StockView readStock(String sku, String replicationMode) {
         List<String> replicaSet = getReplicaSet(sku, replicationMode);
-        List<String> actualNodes = new ArrayList<>();
+        
+        // 1. Kiểm tra xem có ít nhất một node hoạt động (ACTIVE) trong replica set không
+        boolean hasActiveNode = false;
+        for (String node : replicaSet) {
+            if ("ACTIVE".equals(failureDetectorService.nodeStatusMap.get(node))) {
+                hasActiveNode = true;
+                break;
+            }
+        }
+        
+        if (!hasActiveNode) {
+            throw new RuntimeException("Không còn server nào hoạt động");
+        }
 
+        List<String> actualNodes = new ArrayList<>();
         // Tìm các node thực tế đang có SKU này (và node đó đang ACTIVE)
         for (String node : replicaSet) {
             if ("ACTIVE".equals(failureDetectorService.nodeStatusMap.get(node))) {
@@ -143,7 +158,8 @@ public class CoordinatorService {
                 }
             }
         }
-        throw new RuntimeException("Không có node nào ACTIVE trong replica set để phục vụ lệnh đọc hoặc SKU chưa được khởi tạo.");
+        
+        throw new RuntimeException("Dữ liệu không tồn tại trong database");
     }
 
     @Async
@@ -151,6 +167,7 @@ public class CoordinatorService {
         failureDetectorService.nodeStatusMap.put(recoveringNodeId, "RECOVERING");
         String[] allNodes = {"NODE_1", "NODE_2", "NODE_3"};
         
+        // --- 1. PULL RECOVERY: Hồi phục chính node vừa sống lại (recoveringNodeId) từ logs của các node helper khác ---
         for (String helperNode : allNodes) {
             if (helperNode.equals(recoveringNodeId)) continue;
             
@@ -158,11 +175,57 @@ public class CoordinatorService {
                 List<RecoveryLog> logs = findLogs(helperNode, recoveringNodeId);
                 for (RecoveryLog log : logs) {
                     try { Thread.sleep(2000); } catch (InterruptedException ignored) {}
-                    upsert(recoveringNodeId, log.getSku(), log.getQuantity(), "WH-RECOVER");
+                    
+                    // Kiểm tra xem dữ liệu hiện tại trên node đang phục hồi có mới hơn log không
+                    Optional<StockLevel> existingStockOpt = findStock(recoveringNodeId, log.getSku());
+                    boolean shouldUpdate = true;
+                    if (existingStockOpt.isPresent()) {
+                        StockLevel existingStock = existingStockOpt.get();
+                        if (existingStock.getUpdatedAt() != null && log.getCreatedAt() != null) {
+                            if (!log.getCreatedAt().isAfter(existingStock.getUpdatedAt())) {
+                                shouldUpdate = false;
+                                System.out.println("⏭️ Bỏ qua cập nhật SKU " + log.getSku() + " trên " + recoveringNodeId + " vì dữ liệu hiện tại mới hơn hoặc bằng log (Log: " + log.getCreatedAt() + ", DB: " + existingStock.getUpdatedAt() + ")");
+                            }
+                        }
+                    }
+                    
+                    if (shouldUpdate) {
+                        upsert(recoveringNodeId, log.getSku(), log.getQuantity(), log.getWarehouseId() != null ? log.getWarehouseId() : "WH-MAIN", log.getCreatedAt());
+                        System.out.println("🔄 Đã khôi phục SKU " + log.getSku() + " trên " + recoveringNodeId + " từ log của " + helperNode);
+                    }
                     deleteLog(helperNode, log.getLogId());
                 }
             }
         }
+
+        // --- 2. PUSH RECOVERY: Đẩy khôi phục từ chính node vừa sống lại (recoveringNodeId) sang các node target đang ACTIVE ---
+        List<RecoveryLog> ownLogs = getNodeRecoveryLogs(recoveringNodeId);
+        for (RecoveryLog log : ownLogs) {
+            String targetNode = log.getTargetNode();
+            if ("ACTIVE".equals(failureDetectorService.nodeStatusMap.get(targetNode))) {
+                try { Thread.sleep(2000); } catch (InterruptedException ignored) {}
+                
+                // Kiểm tra xem dữ liệu trên targetNode có mới hơn log không
+                Optional<StockLevel> targetStockOpt = findStock(targetNode, log.getSku());
+                boolean shouldUpdate = true;
+                if (targetStockOpt.isPresent()) {
+                    StockLevel targetStock = targetStockOpt.get();
+                    if (targetStock.getUpdatedAt() != null && log.getCreatedAt() != null) {
+                        if (!log.getCreatedAt().isAfter(targetStock.getUpdatedAt())) {
+                            shouldUpdate = false;
+                            System.out.println("⏭️ Bỏ qua đẩy phục hồi từ " + recoveringNodeId + " sang target " + targetNode + " cho SKU " + log.getSku() + " vì dữ liệu trên target mới hơn hoặc bằng log (Log: " + log.getCreatedAt() + ", Target DB: " + targetStock.getUpdatedAt() + ")");
+                        }
+                    }
+                }
+                
+                if (shouldUpdate) {
+                    upsert(targetNode, log.getSku(), log.getQuantity(), log.getWarehouseId() != null ? log.getWarehouseId() : "WH-MAIN", log.getCreatedAt());
+                    System.out.println("🚀 Đã đẩy khôi phục SKU " + log.getSku() + " từ " + recoveringNodeId + " sang target " + targetNode);
+                }
+                deleteLog(recoveringNodeId, log.getLogId());
+            }
+        }
+
         failureDetectorService.nodeStatusMap.put(recoveringNodeId, "ACTIVE");
     }
 
@@ -206,6 +269,44 @@ public class CoordinatorService {
             case "NODE_1" -> node1Repository.setOnline();
             case "NODE_2" -> node2Repository.setOnline();
             case "NODE_3" -> node3Repository.setOnline();
+        }
+    }
+
+    @Scheduled(fixedRate = 10000) // Tự động đồng bộ nền mỗi 10 giây (Anti-Entropy / Active Gossip)
+    public void backgroundSyncLogs() {
+        String[] allNodes = {"NODE_1", "NODE_2", "NODE_3"};
+        
+        for (String sourceNode : allNodes) {
+            // Chỉ đồng bộ nếu sourceNode đang ACTIVE
+            if ("ACTIVE".equals(failureDetectorService.nodeStatusMap.get(sourceNode))) {
+                List<RecoveryLog> logs = getNodeRecoveryLogs(sourceNode);
+                for (RecoveryLog log : logs) {
+                    String targetNode = log.getTargetNode();
+                    // Nếu node target cũng đang hoạt động (ACTIVE)
+                    if ("ACTIVE".equals(failureDetectorService.nodeStatusMap.get(targetNode))) {
+                        try {
+                            Optional<StockLevel> targetStockOpt = findStock(targetNode, log.getSku());
+                            boolean shouldUpdate = true;
+                            if (targetStockOpt.isPresent()) {
+                                StockLevel targetStock = targetStockOpt.get();
+                                if (targetStock.getUpdatedAt() != null && log.getCreatedAt() != null) {
+                                    if (!log.getCreatedAt().isAfter(targetStock.getUpdatedAt())) {
+                                        shouldUpdate = false;
+                                    }
+                                }
+                            }
+                            
+                            if (shouldUpdate) {
+                                upsert(targetNode, log.getSku(), log.getQuantity(), log.getWarehouseId() != null ? log.getWarehouseId() : "WH-MAIN", log.getCreatedAt());
+                                System.out.println("🔄 [Background Sync] Đã đồng bộ SKU " + log.getSku() + " từ " + sourceNode + " sang " + targetNode);
+                            }
+                            deleteLog(sourceNode, log.getLogId());
+                        } catch (Exception e) {
+                            System.err.println("❌ Lỗi khi đồng bộ log nền: " + e.getMessage());
+                        }
+                    }
+                }
+            }
         }
     }
 }

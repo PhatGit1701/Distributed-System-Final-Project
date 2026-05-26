@@ -1,0 +1,63 @@
+-- Drop databases if they exist
+DROP DATABASE IF EXISTS db_node1;
+DROP DATABASE IF EXISTS db_node2;
+DROP DATABASE IF EXISTS db_node3;
+
+-- Create databases
+CREATE DATABASE IF NOT EXISTS db_node1;
+CREATE DATABASE IF NOT EXISTS db_node2;
+CREATE DATABASE IF NOT EXISTS db_node3;
+
+-- Schema for DB_NODE1
+USE db_node1;
+CREATE TABLE stock_levels (
+    sku VARCHAR(50) PRIMARY KEY,
+    quantity INT NOT NULL,
+    warehouse_id VARCHAR(50) NOT NULL,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+CREATE TABLE recovery_log (
+    log_id INT AUTO_INCREMENT PRIMARY KEY,
+    event_id VARCHAR(100) NOT NULL UNIQUE,
+    target_node VARCHAR(50) NOT NULL,
+    sku VARCHAR(50) NOT NULL,
+    quantity INT NOT NULL,
+    warehouse_id VARCHAR(50) NOT NULL DEFAULT 'WH-MAIN',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Schema for DB_NODE2
+USE db_node2;
+CREATE TABLE stock_levels (
+    sku VARCHAR(50) PRIMARY KEY,
+    quantity INT NOT NULL,
+    warehouse_id VARCHAR(50) NOT NULL,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+CREATE TABLE recovery_log (
+    log_id INT AUTO_INCREMENT PRIMARY KEY,
+    event_id VARCHAR(100) NOT NULL UNIQUE,
+    target_node VARCHAR(50) NOT NULL,
+    sku VARCHAR(50) NOT NULL,
+    quantity INT NOT NULL,
+    warehouse_id VARCHAR(50) NOT NULL DEFAULT 'WH-MAIN',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Schema for DB_NODE3
+USE db_node3;
+CREATE TABLE stock_levels (
+    sku VARCHAR(50) PRIMARY KEY,
+    quantity INT NOT NULL,
+    warehouse_id VARCHAR(50) NOT NULL,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+CREATE TABLE recovery_log (
+    log_id INT AUTO_INCREMENT PRIMARY KEY,
+    event_id VARCHAR(100) NOT NULL UNIQUE,
+    target_node VARCHAR(50) NOT NULL,
+    sku VARCHAR(50) NOT NULL,
+    quantity INT NOT NULL,
+    warehouse_id VARCHAR(50) NOT NULL DEFAULT 'WH-MAIN',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
