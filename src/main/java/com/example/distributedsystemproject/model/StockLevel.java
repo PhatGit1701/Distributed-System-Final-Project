@@ -22,8 +22,16 @@ public class StockLevel {
     @Column(name = "updated_at", insertable = false, updatable = false)
     private LocalDateTime updatedAt;
 
+    @Column(name = "version")
+    private Long version;
+
+    @Column(name = "write_id")
+    private String writeId;
+
     public String getSku() { return sku; }
     public Integer getQuantity() { return quantity; }
     public String getWarehouseId() { return warehouseId; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }
+    public Long getVersion() { return version; }
+    public String getWriteId() { return writeId; }
 }

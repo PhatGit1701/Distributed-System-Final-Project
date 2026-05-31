@@ -7,35 +7,52 @@ export default function GuideCard() {
         </svg>
         <span>Cách Thử Nghiệm Kịch Bản</span>
       </h3>
+      <p className="guide-model-note">
+        <strong>Mô hình:</strong> ROWA-A + eventual consistency + hinted handoff (<code>recovery_log</code>).
+        Không đảm bảo linearizability. Mỗi lần ghi có <code>version</code> và <code>write_id</code>.
+        Chi tiết: <code>REPORT.md</code>.
+      </p>
       <div className="guide-steps">
         <div className="guide-step-item">
           <span className="guide-num">1</span>
           <div>
-            <span className="highlight-bold">Chạy ở chế độ FULL Replication:</span> Ghi một SKU (ví dụ: `APPLE`) với mode FULL. Bạn sẽ thấy SKU xuất hiện trên cả <span className="highlight-bold">3 Node</span>.
+            <span className="highlight-bold">FULL Replication:</span> Ghi SKU với mode FULL — dữ liệu trên 3 node, cùng version sau mỗi lần ghi.
           </div>
         </div>
         <div className="guide-step-item">
           <span className="guide-num">2</span>
           <div>
-            <span className="highlight-bold">Chạy ở chế độ PARTIAL Replication:</span> Ghi SKU `SKU-100` với mode PARTIAL. SKU sẽ chỉ được ghi vào <span className="highlight-bold">NODE_1 và NODE_2</span> (do hash % 3 == 0). NODE_3 hoàn toàn không lưu trữ!
+            <span className="highlight-bold">PARTIAL Replication:</span> Ghi <code>SKU-100</code> PARTIAL — chỉ 2 node trong replica set (hash backend).
           </div>
         </div>
         <div className="guide-step-item">
           <span className="guide-num">3</span>
           <div>
-            <span className="highlight-bold">Giả lập Node Sập (Offline):</span> Click nút <span className="highlight-bold" style={{ color: 'var(--color-down)' }}>Offline</span> tại NODE_2. Trạng thái của NODE_2 sẽ chuyển sang <span className="highlight-bold" style={{ color: 'var(--color-down)' }}>DOWN</span>.
+            <span className="highlight-bold">Read One:</span> Đọc nhanh từ replica đầu tiên có dữ liệu — có thể <span className="highlight-bold" style={{ color: '#fbbf24' }}>stale</span>.
           </div>
         </div>
         <div className="guide-step-item">
           <span className="guide-num">4</span>
           <div>
-            <span className="highlight-bold">Ghi dữ liệu khi có node sập (ROWA-A):</span> Ghi lại SKU `SKU-100` khi NODE_2 đang DOWN. Hệ thống sẽ ghi thành công vào NODE_1, đồng thời sinh ra <span className="highlight-bold" style={{ color: 'var(--color-down)' }}>Recovery Log</span> tại NODE_1 để lưu vết cần khôi phục cho NODE_2.
+            <span className="highlight-bold">Read Latest:</span> So sánh <code>version</code> trên mọi ACTIVE — trả bản mới nhất, <span className="highlight-bold" style={{ color: '#34d399' }}>read repair</span> node cũ.
           </div>
         </div>
         <div className="guide-step-item">
           <span className="guide-num">5</span>
           <div>
-            <span className="highlight-bold">Khôi phục tự động (Recovery):</span> Click nút <span className="highlight-bold" style={{ color: 'var(--color-active)' }}>Online</span> tại NODE_2. Bạn sẽ thấy NODE_2 chuyển sang trạng thái <span className="highlight-bold" style={{ color: 'var(--color-recovering)' }}>RECOVERING</span>. Trong vòng vài giây, các bản ghi cũ từ NODE_1 sẽ tự động đồng bộ trả lại cho NODE_2, và nhật ký Recovery Log trên NODE_1 sẽ tự động biến mất! NODE_2 trở lại <span className="highlight-bold" style={{ color: 'var(--color-active)' }}>ACTIVE</span>.
+            <span className="highlight-bold">Quorum Read (R=2):</span> Cần ≥2 replica cùng version; nếu lệch version → lỗi quorum.
+          </div>
+        </div>
+        <div className="guide-step-item">
+          <span className="guide-num">6</span>
+          <div>
+            <span className="highlight-bold">Node DOWN + ghi ROWA-A:</span> Ghi khi một node offline — recovery log trên node còn sống.
+          </div>
+        </div>
+        <div className="guide-step-item">
+          <span className="guide-num">7</span>
+          <div>
+            <span className="highlight-bold">Recovery:</span> Online node → RECOVERING → đồng bộ theo <code>version</code> từ log.
           </div>
         </div>
       </div>

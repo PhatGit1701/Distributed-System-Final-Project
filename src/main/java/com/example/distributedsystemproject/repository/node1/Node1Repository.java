@@ -15,13 +15,27 @@ public interface Node1Repository extends JpaRepository<StockLevel, String> {
 
     @Modifying
     @Transactional
-    @Query(value = "INSERT INTO stock_levels (sku, quantity, warehouse_id, updated_at) VALUES (:sku, :quantity, :warehouseId, :updatedAt) ON DUPLICATE KEY UPDATE quantity = :quantity, updated_at = :updatedAt", nativeQuery = true)
-    void upsertStock(@Param("sku") String sku, @Param("quantity") int quantity, @Param("warehouseId") String warehouseId, @Param("updatedAt") java.time.LocalDateTime updatedAt);
+    @Query(value = """
+        INSERT INTO stock_levels (sku, quantity, warehouse_id, updated_at, version, write_id)
+        VALUES (:sku, :quantity, :warehouseId, :updatedAt, :version, :writeId)
+        ON DUPLICATE KEY UPDATE
+            quantity = :quantity,
+            warehouse_id = :warehouseId,
+            updated_at = :updatedAt,
+            version = :version,
+            write_id = :writeId
+        """, nativeQuery = true)
+    void upsertStock(@Param("sku") String sku, @Param("quantity") int quantity, @Param("warehouseId") String warehouseId,
+                     @Param("updatedAt") java.time.LocalDateTime updatedAt, @Param("version") long version, @Param("writeId") String writeId);
 
     @Modifying
     @Transactional
-    @Query(value = "INSERT INTO recovery_log (event_id, target_node, sku, quantity, warehouse_id) VALUES (UUID(), :targetNode, :sku, :quantity, :warehouseId)", nativeQuery = true)
-    void insertRecoveryLog(@Param("targetNode") String targetNode, @Param("sku") String sku, @Param("quantity") int quantity, @Param("warehouseId") String warehouseId);
+    @Query(value = """
+        INSERT INTO recovery_log (event_id, target_node, sku, quantity, warehouse_id, version, write_id)
+        VALUES (UUID(), :targetNode, :sku, :quantity, :warehouseId, :version, :writeId)
+        """, nativeQuery = true)
+    void insertRecoveryLog(@Param("targetNode") String targetNode, @Param("sku") String sku, @Param("quantity") int quantity,
+                           @Param("warehouseId") String warehouseId, @Param("version") long version, @Param("writeId") String writeId);
 
     @Query(value = "SELECT * FROM stock_levels WHERE sku = :sku", nativeQuery = true)
     Optional<StockLevel> findStockBySku(@Param("sku") String sku);

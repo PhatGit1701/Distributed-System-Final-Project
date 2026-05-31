@@ -1,6 +1,7 @@
 package com.example.distributedsystemproject.controller;
 
 import com.example.distributedsystemproject.component.FailureDetectorComponent;
+import com.example.distributedsystemproject.model.ReadMode;
 import com.example.distributedsystemproject.model.RecoveryLog;
 import com.example.distributedsystemproject.model.StockLevel;
 import com.example.distributedsystemproject.model.StockView;
@@ -22,8 +23,20 @@ public class DemoController {
     @Autowired private FailureDetectorComponent failureDetectorComponent;
 
     @GetMapping("/stock/{sku}")
-    public StockView getStock(@PathVariable String sku, @RequestParam(defaultValue = "FULL") String replicationMode) {
-        return coordinatorService.readStock(sku, replicationMode);
+    public StockView getStock(
+            @PathVariable String sku,
+            @RequestParam(defaultValue = "FULL") String replicationMode,
+            @RequestParam(defaultValue = "ONE") String readMode
+    ) {
+        return coordinatorService.readStock(sku, replicationMode, ReadMode.fromString(readMode));
+    }
+
+    @GetMapping("/replica-set")
+    public List<String> getReplicaSet(
+            @RequestParam String sku,
+            @RequestParam(defaultValue = "FULL") String replicationMode
+    ) {
+        return coordinatorService.getReplicaSet(sku, replicationMode);
     }
 
     @PostMapping("/stock")
@@ -76,6 +89,11 @@ public class DemoController {
         } else if ("Dữ liệu không tồn tại trong database".equals(msg)) {
             return ResponseEntity
                 .status(HttpStatus.NOT_FOUND)
+                .contentType(MediaType.TEXT_PLAIN)
+                .body(msg);
+        } else if (msg != null && msg.startsWith("Quorum không đạt")) {
+            return ResponseEntity
+                .status(HttpStatus.CONFLICT)
                 .contentType(MediaType.TEXT_PLAIN)
                 .body(msg);
         }

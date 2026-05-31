@@ -226,10 +226,12 @@ header {
 .node-card.active {
   box-shadow: inset 0 0 12px rgba(16, 185, 129, 0.05);
 }
+
 .node-card.active .status-badge {
   background: rgba(16, 185, 129, 0.15);
   color: var(--color-active);
 }
+
 .node-card.active .status-badge::before {
   background: var(--color-active);
   box-shadow: var(--glow-green);
@@ -240,10 +242,12 @@ header {
   box-shadow: inset 0 0 12px rgba(239, 68, 68, 0.05);
   border-color: rgba(239, 68, 68, 0.2);
 }
+
 .node-card.down .status-badge {
   background: rgba(239, 68, 68, 0.15);
   color: var(--color-down);
 }
+
 .node-card.down .status-badge::before {
   background: var(--color-down);
   box-shadow: var(--glow-red);
@@ -254,10 +258,12 @@ header {
   box-shadow: inset 0 0 12px rgba(245, 158, 11, 0.05);
   border-color: rgba(245, 158, 11, 0.2);
 }
+
 .node-card.recovering .status-badge {
   background: rgba(245, 158, 11, 0.15);
   color: var(--color-recovering);
 }
+
 .node-card.recovering .status-badge::before {
   background: var(--color-recovering);
   box-shadow: var(--glow-yellow);
@@ -265,19 +271,57 @@ header {
 }
 
 @keyframes pulse-glow {
-  0% { transform: scale(0.9); opacity: 0.6; }
-  50% { transform: scale(1.2); opacity: 1; box-shadow: 0 0 12px var(--color-active); }
-  100% { transform: scale(0.9); opacity: 0.6; }
+  0% {
+    transform: scale(0.9);
+    opacity: 0.6;
+  }
+
+  50% {
+    transform: scale(1.2);
+    opacity: 1;
+    box-shadow: 0 0 12px var(--color-active);
+  }
+
+  100% {
+    transform: scale(0.9);
+    opacity: 0.6;
+  }
 }
+
 @keyframes pulse-glow-red {
-  0% { transform: scale(0.9); opacity: 0.6; }
-  50% { transform: scale(1.2); opacity: 1; box-shadow: 0 0 12px var(--color-down); }
-  100% { transform: scale(0.9); opacity: 0.6; }
+  0% {
+    transform: scale(0.9);
+    opacity: 0.6;
+  }
+
+  50% {
+    transform: scale(1.2);
+    opacity: 1;
+    box-shadow: 0 0 12px var(--color-down);
+  }
+
+  100% {
+    transform: scale(0.9);
+    opacity: 0.6;
+  }
 }
+
 @keyframes pulse-glow-yellow {
-  0% { transform: scale(0.9); opacity: 0.6; }
-  50% { transform: scale(1.2); opacity: 1; box-shadow: 0 0 12px var(--color-recovering); }
-  100% { transform: scale(0.9); opacity: 0.6; }
+  0% {
+    transform: scale(0.9);
+    opacity: 0.6;
+  }
+
+  50% {
+    transform: scale(1.2);
+    opacity: 1;
+    box-shadow: 0 0 12px var(--color-recovering);
+  }
+
+  100% {
+    transform: scale(0.9);
+    opacity: 0.6;
+  }
 }
 
 /* Inner databases preview */
@@ -319,9 +363,11 @@ header {
   border-radius: 4px;
   border-left: 2.5px solid #4b5563;
 }
+
 .db-item.stock-item {
   border-left-color: #3b82f6;
 }
+
 .db-item.log-item {
   border-left-color: #ef4444;
   background: rgba(239, 68, 68, 0.03);
@@ -366,6 +412,7 @@ header {
   background: rgba(239, 68, 68, 0.05);
   border-color: rgba(239, 68, 68, 0.2);
 }
+
 .btn-sim.btn-offline:hover {
   background: rgba(239, 68, 68, 0.15);
 }
@@ -375,6 +422,7 @@ header {
   background: rgba(16, 185, 129, 0.05);
   border-color: rgba(16, 185, 129, 0.2);
 }
+
 .btn-sim.btn-online:hover {
   background: rgba(16, 185, 129, 0.15);
 }
@@ -503,8 +551,15 @@ select.form-control {
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(5px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .result-row {
@@ -532,6 +587,7 @@ select.form-control {
   font-weight: 600;
   font-family: var(--font-code);
 }
+
 .result-value.highlight-node {
   color: #a5b4fc;
   background: rgba(99, 102, 241, 0.15);
@@ -602,10 +658,21 @@ select.form-control {
   word-break: break-all;
 }
 
-.console-text.info { color: #818cf8; }
-.console-text.success { color: #34d399; }
-.console-text.warn { color: #fbbf24; }
-.console-text.error { color: #f87171; }
+.console-text.info {
+  color: #818cf8;
+}
+
+.console-text.success {
+  color: #34d399;
+}
+
+.console-text.warn {
+  color: #fbbf24;
+}
+
+.console-text.error {
+  color: #f87171;
+}
 
 /* Guide instructions card */
 .guide-card {
@@ -614,6 +681,13 @@ select.form-control {
   border-radius: 16px;
   padding: 1.5rem;
   height: fit-content;
+}
+
+.guide-model-note {
+  font-size: 0.85rem;
+  color: var(--text-muted, #94a3b8);
+  margin-bottom: 1rem;
+  line-height: 1.5;
 }
 
 .guide-card h3 {
@@ -657,4 +731,134 @@ select.form-control {
 .highlight-bold {
   color: #ffffff;
   font-weight: 600;
+}
+
+/* ======================================================
+   CLUSTER VISUALIZATION
+   ====================================================== */
+
+.viz-panel {
+  background: linear-gradient(145deg, rgba(17, 24, 39, 0.85), rgba(6, 10, 23, 0.95));
+  border: 1px solid rgba(99, 102, 241, 0.12);
+}
+
+.viz-svg-wrapper {
+  width: 100%;
+  border-radius: 12px;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.03);
+  padding: 0.5rem;
+}
+
+.viz-svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+/* Pulsing glow rings around nodes */
+.viz-pulse-green {
+  animation: viz-ring-pulse-green 2.5s ease-in-out infinite;
+}
+
+.viz-pulse-red {
+  animation: viz-ring-pulse-red 1.2s ease-in-out infinite;
+}
+
+.viz-pulse-yellow {
+  animation: viz-ring-pulse-yellow 1.5s ease-in-out infinite;
+}
+
+.viz-pulse-indigo {
+  animation: viz-ring-pulse-indigo 3s ease-in-out infinite;
+}
+
+@keyframes viz-ring-pulse-green {
+  0%, 100% { r: 30; opacity: 0.15; }
+  50% { r: 34; opacity: 0.35; }
+}
+
+@keyframes viz-ring-pulse-red {
+  0%, 100% { r: 30; opacity: 0.2; }
+  50% { r: 36; opacity: 0.55; }
+}
+
+@keyframes viz-ring-pulse-yellow {
+  0%, 100% { r: 30; opacity: 0.15; }
+  50% { r: 34; opacity: 0.4; }
+}
+
+@keyframes viz-ring-pulse-indigo {
+  0%, 100% { r: 30; opacity: 0.12; }
+  50% { r: 33; opacity: 0.3; }
+}
+
+/* Connection lines */
+.viz-connection-line {
+  transition: stroke 0.4s ease, opacity 0.4s ease;
+}
+
+.viz-line-down {
+  animation: viz-dash-crawl 1s linear infinite;
+}
+
+@keyframes viz-dash-crawl {
+  to { stroke-dashoffset: -8; }
+}
+
+/* Active glowing line overlay when a packet is in-flight */
+.viz-line-glow-active {
+  animation: viz-glow-fade 5s ease-out forwards;
+}
+
+@keyframes viz-glow-fade {
+  0% { opacity: 0.6; }
+  80% { opacity: 0.3; }
+  100% { opacity: 0; }
+}
+
+/* Packet dot */
+.viz-packet-dot {
+  animation: viz-dot-pulse 0.4s ease-in-out infinite alternate;
+}
+
+@keyframes viz-dot-pulse {
+  from { r: 3; }
+  to { r: 5; }
+}
+
+/* Packet label group */
+.viz-packet-label-group {
+  animation: viz-label-fade-in 0.3s ease-out;
+}
+
+@keyframes viz-label-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Packet group fade-out when finishing */
+.viz-packet-group {
+  animation: viz-packet-lifecycle 5s ease-out forwards;
+}
+
+@keyframes viz-packet-lifecycle {
+  0% { opacity: 1; }
+  85% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* Sync group styling — amber glow for node-to-node recovery */
+.viz-sync-group {
+  animation: viz-packet-lifecycle 5s ease-out forwards;
+}
+
+/* Guide card moved to bottom — full width styling */
+.guide-card-fullwidth {
+  margin-top: 2rem;
+}
+
+.guide-card-fullwidth .guide-card {
+  width: 100%;
 }

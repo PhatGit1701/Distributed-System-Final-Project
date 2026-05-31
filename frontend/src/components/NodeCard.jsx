@@ -22,7 +22,14 @@ export default function NodeCard({ nodeId, status, stocks, logs, isReplicaTarget
             stocks.map((item, i) => (
               <li key={i} className="db-item stock-item">
                 <span>{item.sku}</span>
-                <span><b>{item.quantity}</b></span>
+                <span>
+                  <b>{item.quantity}</b>
+                  {item.version != null && (
+                    <span style={{ marginLeft: '0.35rem', opacity: 0.75, fontSize: '0.7rem' }}>
+                      v{item.version}
+                    </span>
+                  )}
+                </span>
               </li>
             ))
           )}

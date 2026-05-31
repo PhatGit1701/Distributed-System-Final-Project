@@ -1,10 +1,14 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+
+const PACKET_ANIM_DURATION = 5000;
+const PACKET_CLEANUP_DELAY = 5400;
 import Header from './components/Header';
 import NodeCard from './components/NodeCard';
 import WritePanel from './components/WritePanel';
 import ReadPanel from './components/ReadPanel';
 import GuideCard from './components/GuideCard';
 import ConsoleLog from './components/ConsoleLog';
+import ClusterVisualization from './components/ClusterVisualization';
 import { getReplicaSet } from './utils/replication';
 
 const NODE_IDS = ['NODE_1', 'NODE_2', 'NODE_3'];
@@ -36,6 +40,9 @@ function App() {
     },
   ]);
 
+  // Active packets for visualization animation
+  const [activePackets, setActivePackets] = useState([]);
+
   // Track the current write SKU/mode for replica target highlighting
   const [writeSkuForHighlight, setWriteSkuForHighlight] = useState('SKU-100');
   const [writeModeForHighlight, setWriteModeForHighlight] = useState('FULL');
@@ -54,6 +61,96 @@ function App() {
     const timestamp = `[${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}]`;
     setConsoleLogs([{ timestamp, message: 'Đã xoá console.', type: 'info' }]);
   }, []);
+
+  // Trigger packet animation on the cluster visualization
+  const triggerPacketAnimation = useCallback((packetData) => {
+    // packetData: { type: 'WRITE'|'READ', sku, targetNodes: [...], servedByNode?: string }
+    const { type, sku, targetNodes, servedByNode } = packetData;
+
+    if (type === 'WRITE') {
+      // Spawn one packet per target node
+      const newPackets = targetNodes.map((nodeId) => ({
+        id: `${Date.now()}-${nodeId}-${Math.random().toString(36).slice(2, 6)}`,
+        type: 'WRITE',
+        targetNode: nodeId,
+        label: `WR ${sku}`,
+        direction: 'request',
+      }));
+      setActivePackets((prev) => [...prev, ...newPackets]);
+
+      // Auto-remove after animation completes
+      setTimeout(() => {
+        setActivePackets((prev) =>
+          prev.filter((p) => !newPackets.find((np) => np.id === p.id))
+        );
+      }, PACKET_CLEANUP_DELAY);
+    } else if (type === 'READ') {
+      const targetNode = servedByNode || targetNodes[0];
+      // Outbound request packet
+      const requestPacket = {
+        id: `${Date.now()}-${targetNode}-req-${Math.random().toString(36).slice(2, 6)}`,
+        type: 'READ',
+        targetNode,
+        label: `RD ${sku}`,
+        direction: 'request',
+      };
+      setActivePackets((prev) => [...prev, requestPacket]);
+
+      // After outbound finishes, spawn response packet
+      setTimeout(() => {
+        setActivePackets((prev) => prev.filter((p) => p.id !== requestPacket.id));
+
+        const responsePacket = {
+          id: `${Date.now()}-${targetNode}-res-${Math.random().toString(36).slice(2, 6)}`,
+          type: 'READ',
+          targetNode,
+          label: `RES ${sku}`,
+          direction: 'response',
+        };
+        setActivePackets((prev) => [...prev, responsePacket]);
+
+        setTimeout(() => {
+          setActivePackets((prev) => prev.filter((p) => p.id !== responsePacket.id));
+        }, PACKET_CLEANUP_DELAY);
+      }, PACKET_ANIM_DURATION);
+    }
+  }, []);
+
+  // Auto-generate recovery sync packets when a node is RECOVERING
+  const prevStatusesRef = useRef(nodeStatuses);
+  useEffect(() => {
+    const prev = prevStatusesRef.current;
+    prevStatusesRef.current = nodeStatuses;
+
+    for (const nodeId of NODE_IDS) {
+      // Detect transition to RECOVERING, or sustain RECOVERING state
+      if (nodeStatuses[nodeId] === 'RECOVERING') {
+        // Find active nodes that will sync data to the recovering node
+        const activeNodes = NODE_IDS.filter(
+          (n) => n !== nodeId && nodeStatuses[n] === 'ACTIVE'
+        );
+
+        if (activeNodes.length > 0) {
+          const syncPackets = activeNodes.map((sourceNode) => ({
+            id: `${Date.now()}-sync-${sourceNode}-${nodeId}-${Math.random().toString(36).slice(2, 6)}`,
+            type: 'SYNC',
+            sourceNode,
+            targetNode: nodeId,
+            label: 'SYNC',
+            direction: 'node-to-node',
+          }));
+
+          setActivePackets((prev) => [...prev, ...syncPackets]);
+
+          setTimeout(() => {
+            setActivePackets((prev) =>
+              prev.filter((p) => !syncPackets.find((sp) => sp.id === p.id))
+            );
+          }, PACKET_CLEANUP_DELAY + 500);
+        }
+      }
+    }
+  }, [nodeStatuses]);
 
   // Fetch node stocks
   const fetchNodeStocks = useCallback(async (nodeId) => {
@@ -169,18 +266,30 @@ function App() {
                   onLog={logToConsole}
                   onSkuChange={setWriteSkuForHighlight}
                   onModeChange={setWriteModeForHighlight}
+                  onRequestTrigger={triggerPacketAnimation}
                 />
-                <ReadPanel onLog={logToConsole} />
+                <ReadPanel
+                  onLog={logToConsole}
+                  onRequestTrigger={triggerPacketAnimation}
+                />
               </div>
             </div>
 
           </div>
 
-          {/* Right Side: Guide & Console */}
+          {/* Right Side: Console on top, Visualization below (aligned with transaction panel) */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-            <GuideCard />
             <ConsoleLog logs={consoleLogs} onClear={clearConsole} />
+            <ClusterVisualization
+              nodeStatuses={nodeStatuses}
+              activePackets={activePackets}
+            />
           </div>
+        </div>
+
+        {/* Bottom: Guide card (full width, pushed below the main grid) */}
+        <div className="guide-card-fullwidth">
+          <GuideCard />
         </div>
       </div>
     </>

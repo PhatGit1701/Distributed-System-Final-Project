@@ -29,6 +29,12 @@ public class RecoveryLog {
     @Column(name = "created_at", insertable = false, updatable = false)
     private LocalDateTime createdAt;
 
+    @Column(name = "version")
+    private Long version;
+
+    @Column(name = "write_id")
+    private String writeId;
+
     public Long getLogId() { return logId; }
     public String getEventId() { return eventId; }
     public String getTargetNode() { return targetNode; }
@@ -36,4 +42,6 @@ public class RecoveryLog {
     public Integer getQuantity() { return quantity; }
     public String getWarehouseId() { return warehouseId; }
     public LocalDateTime getCreatedAt() { return createdAt; }
+    public Long getVersion() { return version; }
+    public String getWriteId() { return writeId; }
 }

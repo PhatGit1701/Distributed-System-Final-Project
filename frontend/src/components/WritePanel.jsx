@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { getReplicaSet } from '../utils/replication';
 
-export default function WritePanel({ onLog, onSkuChange, onModeChange }) {
+export default function WritePanel({ onLog, onSkuChange, onModeChange, onRequestTrigger }) {
   const [mode, setMode] = useState('FULL');
   const [sku, setSku] = useState('SKU-100');
   const [quantity, setQuantity] = useState('15');
@@ -13,6 +13,13 @@ export default function WritePanel({ onLog, onSkuChange, onModeChange }) {
       onLog('Thiếu thông tin SKU hoặc số lượng để ghi.', 'error');
       return;
     }
+
+    // Trigger visualization packet animation
+    onRequestTrigger?.({
+      type: 'WRITE',
+      sku,
+      targetNodes: replicaSet,
+    });
 
     onLog(`🚀 Đang gửi yêu cầu ghi Stock: SKU = ${sku}, Qty = ${quantity}, Mode = ${mode}...`, 'info');
 
